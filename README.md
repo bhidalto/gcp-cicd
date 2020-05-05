@@ -99,11 +99,11 @@ App Engine deployer permission is needed to create new [versions](https://cloud.
 gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/appengine.serviceAdmin
 ```
-#Service Admin permission will alow our pipeline to [migrate traffic](https://cloud.google.com/appengine/docs/admin-api/access-control#app-engine-service-admin) between versions.
+Service Admin permission will alow our pipeline to [migrate traffic](https://cloud.google.com/appengine/docs/admin-api/access-control#app-engine-service-admin) between versions.
 
 Following up, we will modify our App Engine code and push it to the repo. This time we will make the trigger build and have our application be re-deployed. If everything has been set up correctly, our application will be automatically updated and the GAE will be serving the latest changes commited to the repository. Let's go ahead an do a simple modification to the main.py:
 
-`
+```
 import webapp2
 
 
@@ -111,7 +111,7 @@ class MainPage(webapp2.RequestHandler):
     def get(self):
         self.response.headers['Content-Type'] = 'text/plain'
         self.response.write('Hello, World! This is our production environment!')
-`
+```
 - `git add main.py`
 - `git commit -m "First production trigger!" `
 - `git push`
