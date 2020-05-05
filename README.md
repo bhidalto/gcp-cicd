@@ -24,7 +24,7 @@ Now that we've successfully created our repository, let's create a branch named 
 - `git push origin dev`
 
 # Setting up the Google Cloud Platform environment
-### Google App Engine
+## Google App Engine
 First of all let's set the region in which we will be working, in this case europe-west2 located in [London](https://cloud.google.com/compute/docs/regions-zones#locations).
 
 - `gcloud app create --region=europe-west2`
@@ -45,3 +45,40 @@ Pushing the code to our repository, but first let's create a folder to copy the 
 - `git push`
 
 Now we have our webpage serving in `$PROJECT_ID.nw.r.appspot.com` and the code in the Github repo, at our master branch.
+
+## Connecting GitHub to GCP and creating the Cloud Build trigger
+### Connecting GitHub to GCP
+
+This operation needs to be done using the Cloud Console UI, as we will find in the [documentation](https://cloud.google.com/cloud-build/docs/running-builds/create-manage-triggers#connecting_to_source_repositories), following the next steps:
+
+- Navigate to `Cloud Build > Triggers` in the Cloud Console menu 
+- Click `Connect Repository`
+- Select `GitHub (Cloud Build GitHub App)` as source
+- Authenticate with your GitHub account
+- Select the repository to be linked.
+- Skip last part that will create the trigger from the UI as we will create it from the Cloud Shell in the following step, making use of the Gcloud SDK.
+
+### Creating the Cloud Build Trigger
+At this point, we already have our repository linked to GCP, but we don't have a way to communicate GCP what should be done whenever a push action is done to our repo. Let's proceed to create a Push Trigger in our Cloud Build trigger in order to automatically deploy to Google App Engine whenever we commit changes. From the Cloud Shell, run the following command:
+
+```    
+    gcloud beta builds triggers create github \
+    --repo-name=[REPO_NAME] \
+    --repo-owner=[REPO_OWNER] \
+    --branch-pattern="master" \  #We only want to listen to changes made to master branch
+    --build-config=[BUILD_CONFIG_FILE]" #In this case our file will be named cloudbuild.yaml, located at production/hello_world/cloudbuild.yaml
+```
+
+The trigger gets automatically created, however we don't have the `cloudbuild.yaml` created in our repository and therefore our pipeline will break. Moving on, let's proceed to create the `cloudbuild.yaml` and push it to our repository.
+
+- `touch cloudbuild.yaml`
+- Modify the yaml and add the following:
+  ```
+  steps:
+  - name: "gcr.io/cloud-builders/gcloud"
+    args: ["app", "deploy", "--version", "first"]
+  ```
+Pushing the changes to GitHub (this time we want to [skip](https://cloud.google.com/cloud-build/docs/running-builds/create-manage-triggers#skipping_a_build_trigger) triggering the Build, as for now we're not interested in re-deploying our code):
+- `git add cloudbuild.yaml`
+- `git commit -m "[skip ci]"`
+- `git push`
