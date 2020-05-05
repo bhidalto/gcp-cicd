@@ -36,6 +36,10 @@ Now we have initialized the App Engine app, but we need to deploy before it real
 - `gcloud app deploy --version first --quiet` This will deploy a service named "default" and its version will be named "first. This version will be hosting our production environment.
 - `gcloud app browse` will show the URL in which our webpage is serving. URL should look like `$PROJECT_ID.nw.r.appspot.com`
 
+To end up we will need to enable the App Engine API, from the Cloud Shell as well run the following:
+
+`gcloud services enable appengine.googleapis.com`
+
 Pushing the code to our repository, but first let's create a folder to copy the data in.
 
 - `mkdir production`
@@ -66,7 +70,7 @@ At this point, we already have our repository linked to GCP, but we don't have a
     --repo-name=[REPO_NAME] \
     --repo-owner=[REPO_OWNER] \
     --branch-pattern="master" \  #We only want to listen to changes made to master branch
-    --build-config=[BUILD_CONFIG_FILE]" #In this case our file will be named cloudbuild.yaml, located at production/hello_world/cloudbuild.yaml
+    --build-config=[BUILD_CONFIG_FILE]" #In this case our file will be named cloudbuild.yaml, located at "production/hello_world/cloudbuild.yaml"
 ```
 
 The trigger gets automatically created, however we don't have the `cloudbuild.yaml` created in our repository and therefore our pipeline will break. Moving on, let's proceed to create the `cloudbuild.yaml` and push it to our repository.
@@ -74,11 +78,40 @@ The trigger gets automatically created, however we don't have the `cloudbuild.ya
 - `touch cloudbuild.yaml`
 - Modify the yaml and add the following:
   ```
-  steps:
-  - name: "gcr.io/cloud-builders/gcloud"
-    args: ["app", "deploy", "--version", "first"]
+    steps:
+    - name: "gcr.io/cloud-builders/gcloud"
+      args: ["app", "deploy", "--version", "first", "production/hello_world/app.yaml"]
   ```
 Pushing the changes to GitHub (this time we want to [skip](https://cloud.google.com/cloud-build/docs/running-builds/create-manage-triggers#skipping_a_build_trigger) triggering the Build, as for now we're not interested in re-deploying our code):
+
 - `git add cloudbuild.yaml`
 - `git commit -m "[skip ci]"`
+- `git push`
+
+Before anything else, let's make sure that our Cloud Build service account has the needed permissions to deploy to App Engine. To do that, run the following commands from the Cloud Shell:
+
+```
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/appengine.deployer
+```
+App Engine deployer permission is needed to create new [versions](https://cloud.google.com/appengine/docs/admin-api/access-control#app-engine-deployer).
+```
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com --role=roles/appengine.serviceAdmin
+```
+#Service Admin permission will alow our pipeline to [migrate traffic](https://cloud.google.com/appengine/docs/admin-api/access-control#app-engine-service-admin) between versions.
+
+Following up, we will modify our App Engine code and push it to the repo. This time we will make the trigger build and have our application be re-deployed. If everything has been set up correctly, our application will be automatically updated and the GAE will be serving the latest changes commited to the repository. Let's go ahead an do a simple modification to the main.py:
+
+`
+import webapp2
+
+
+class MainPage(webapp2.RequestHandler):
+    def get(self):
+        self.response.headers['Content-Type'] = 'text/plain'
+        self.response.write('Hello, World! This is our production environment!')
+`
+- `git add main.py`
+- `git commit -m "First production trigger!" `
 - `git push`
