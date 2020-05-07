@@ -115,3 +115,84 @@ class MainPage(webapp2.RequestHandler):
 - `git add main.py`
 - `git commit -m "First production trigger!" `
 - `git push`
+
+# Creating the Development environment
+
+At this point we have our App Engine up and running and with Cloud Build integrated, all of the changes happening to the repository will be automatically reflected in our application. 
+Now let's create a Development environment that will be totally isolated and will be serving on another service. This will allow us to freely test any fresh update without having the anxiousness of affecting our production environment in case any bug appears.
+
+Before anything else, let's move to the dev branch that we created previously and create a dev folder:
+
+- `git checkout dev` 
+- `mkdir dev`
+
+As well as we did before, we are going to re-use the Hello World sample that we have downloaded before:
+
+`cp -r python-docs-samples/appengine/standard/hello_world/ dev/`
+
+We are going to modify the code so it looks like a dev environment in the same fashion we did with production. The `main.py` should look like:
+
+```
+import webapp2
+
+
+class MainPage(webapp2.RequestHandler):
+    def get(self):
+        self.response.headers['Content-Type'] = 'text/plain'
+        self.response.write('Hello, World! This is our development environment!')
+```
+
+This time we also need to modify the app.yaml to point to the right service:
+
+```
+runtime: python27
+api_version: 1
+threadsafe: true
+service: dev
+
+handlers:
+- url: /.*
+  script: main.app
+
+```
+In our previous deployment the `app.yaml` does not contain the service, therefore the default one is used.
+
+Last but not least, the `cloudbuild.yaml` to specify the deployment steps:
+
+- `touch cloudbuild.yaml` #We will be creating this inside `dev/hello_world/` folder
+- Modify it so it looks like:
+
+```
+    steps:
+    - name: "gcr.io/cloud-builders/gcloud"
+      args: ["app", "deploy", "--version", "first", "dev/hello_world/app.yaml"]
+``` 
+
+Finally, let's create the trigger to link our pushes to the repository with Cloud Build to have our App Engine dev environment deployed:
+
+```    
+    gcloud beta builds triggers create github \
+    --repo-name=[REPO_NAME] \
+    --repo-owner=[REPO_OWNER] \
+    --branch-pattern="dev" \  #We only want to listen to changes made to master branch
+    --build-config=[BUILD_CONFIG_FILE]" #In this case our file will be named cloudbuild.yaml, located at "dev/hello_world/cloudbuild.yaml"
+```
+
+And push the dev folder to the repo to try that everything is working as expected:
+
+- `git add dev`
+- `git commit -m "Pushing to development"`
+- `git push origin dev`
+
+If everything has run successfully, a new service should have been created with the following URL:
+
+`https://dev-dot-$PROJECT_ID.nw.r.appspot.com`
+
+Notice that when using services, the `SERVICE_NAME-dot` gets added at the beginning of the URL.
+
+# Looking at the future
+
+Right now the set up has the master branch as deployer for our default GAE service and the dev branch will serve the changes made on the development environment.
+However, this is not the best scenario, as we're risking any commit happening to master to update our service. One good option to replace this behaviour would be modifying the Cloud Build trigger to listen to Pull Requests rather than pushes. Information can be found in the [Cloud Build documentation ](https://cloud.google.com/cloud-build/docs/automating-builds/create-github-app-triggers#creating_github_app_triggers_2) or in the [gcloud documentation](https://cloud.google.com/sdk/gcloud/reference/beta/builds/triggers/create/github#--comment-control).
+
+Also at the moment there's any sort of testing done before deploying and faulty code gets passed to our application. Tests can be easily added in previous steps at our `cloudbuild.yaml` and if any of those fails, the Build will fail and the deployment does not trigger.
